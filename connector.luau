@@ -6,6 +6,15 @@ end
 --// Variables \\--
 local BridgeURL = getgenv().BridgeURL or ... or "localhost:16384"
 
+--// ★ 自动补协议: BridgeURL 带 https:// 就原样用, 否则补 http://
+--//   (原版硬编码 "http://".., 走 https 隧道/Codespaces 会挂)
+local function BridgeBase()
+    local u = tostring(BridgeURL):gsub("/+$", "")
+    if u:sub(1, 8) == "https://" then return u end
+    if u:sub(1, 7) == "http://" then return u end
+    return "http://" .. u
+end
+
 --// Libraries \\--
 
 -- Lua 5.1+ base64 v3.0 (c) 2009 by Alex Kloss <alexthkloss@web.de>
@@ -224,7 +233,7 @@ local BaseBridge = {}; do
             local response
             local thread = task.spawn(function()
                 local success, data = pcall(request, {
-                    Url = "http://" .. BridgeURL,
+                    Url = BridgeBase(),
                     Method = "GET"
                 })
 
@@ -283,7 +292,7 @@ local WebSocketBridge = setmetatable({}, {__index = BaseBridge}); do
         local wsConnection = nil
         local connectionThread = task.spawn(function()
             local success, result = pcall(function()
-                return WebSocket.connect("ws://" .. BridgeURL)
+                return WebSocket.connect((BridgeBase():gsub("^http", "ws")))
             end)
             if success then
                 wsConnection = result
@@ -393,7 +402,7 @@ local HTTPBridge = setmetatable({}, {__index = BaseBridge}); do
         --// Register with the server \\--
         pcall(function()
             local regResponse = request({
-                Url = "http://" .. BridgeURL .. "/register",
+                Url = BridgeBase() .. "/register",
                 Method = "POST",
                 Headers = { ["Content-Type"] = "application/json" },
                 Body = HttpService:JSONEncode(GetRegistrationInfo()),
@@ -410,7 +419,7 @@ local HTTPBridge = setmetatable({}, {__index = BaseBridge}); do
             
             while self.Connected do
                 local success, _ = pcall(function()
-                    local pollUrl = "http://" .. BridgeURL .. "/poll"
+                    local pollUrl = BridgeBase() .. "/poll"
                     if self.ClientId then
                         pollUrl = pollUrl .. "?clientId=" .. self.ClientId
                     end
@@ -442,7 +451,7 @@ local HTTPBridge = setmetatable({}, {__index = BaseBridge}); do
                             
                             --// Send response back \\--
                             request({
-                                Url = "http://" .. BridgeURL .. "/respond",
+                                Url = BridgeBase() .. "/respond",
                                 Method = "POST",
                                 Headers = {
                                     ["Content-Type"] = "application/json"
@@ -639,7 +648,7 @@ local function UploadScriptSourceBatch(clientId, scripts, hasFinishedMapping)
     if not IsScriptMappingTransportReady(clientId) then return false end
 
     local ok, response = pcall(request, {
-        Url = "http://" .. BridgeURL .. "/script-sources",
+        Url = BridgeBase() .. "/script-sources",
         Method = "POST",
         Headers = {
             ["Content-Type"] = "application/json"
